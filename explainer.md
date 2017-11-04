@@ -606,13 +606,13 @@ vrDevice.requestSession({ exclusive: true, waitForActivate: true }).then(OnSessi
 
 Once the deferred session request has been fulfilled or rejected, a new deferred session request will need to be issued if the page wishes to respond to future activation actions.
 
-To detect when the user removes the headset, at which point the page may want to end the session, listen for the `deactivate` event. Note that not all devices capable of detecting activation can reliably detect deactivation, so pages are not guaranteed to receive an associated `deactivate` event for each activation action.
+To detect when the user removes the headset, at which point the page may want to end the exclusive session, listen for the `VRSession`'s `deactivate` event. Note that not all devices capable of detecting activation can reliably detect deactivation and the user may leave the page before deactivating, so pages are not guaranteed to receive an associated `deactivate` event for each activation action. The `deactivate` event will only fire for exclusive sessions.
 
 ```js
-vrDevice.addEventListener('deactivate', (vrDeviceEvent) => {
-  if (vrSession.device == vrDeviceEvent.device) {
-    vrSession.endSession().then(OnSessionEnded);
-  }
+// End the session if the user deactivates the VR hardware
+// (for example: by taking it off).
+vrSession.addEventListener('deactivate', (event) => {
+  event.session.endSession().then(OnSessionEnded);
 });
 ```
 
@@ -726,8 +726,6 @@ partial interface Navigator {
 [SecureContext, Exposed=Window] interface VRDevice : EventTarget {
   readonly attribute boolean external;
 
-  attribute EventHandler ondeactivate;
-
   Promise<void> supportsSession(optional VRSessionCreationOptions parameters);
   Promise<VRSession> requestSession(optional VRSessionCreationOptions parameters);
 };
@@ -757,6 +755,7 @@ dictionary VRSessionCreationOptions {
   attribute EventHandler onblur;
   attribute EventHandler onfocus;
   attribute EventHandler onresetpose;
+  attribute EventHandler ondeactivate;
   attribute EventHandler onend;
 
   Promise<VRFrameOfReference> requestFrameOfReference(VRFrameOfReferenceType type, optional VRFrameOfReferenceOptions options);
@@ -880,15 +879,6 @@ dictionary VRFrameOfReferenceOptions {
 //
 // Events
 //
-
-[SecureContext, Exposed=Window, Constructor(DOMString type, VRDeviceEventInit eventInitDict)]
-interface VRDeviceEvent : Event {
-  readonly attribute VRDevice device;
-};
-
-dictionary VRDeviceEventInit : EventInit {
-  required VRDevice device;
-};
 
 [SecureContext, Exposed=Window, Constructor(DOMString type, VRSessionEventInit eventInitDict)]
 interface VRSessionEvent : Event {
