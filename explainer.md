@@ -591,38 +591,15 @@ vrSession.addEventListener('resetpose', vrSessionEvent => {
 });
 ```
 
-### Presenting automatically when the user interacts with the headset
-
-Many VR devices can detect when the headset is being worn or used. For example: an Oculus Rift or Vive have proximity sensors that indicate when the headset is being worn. And a Daydream device uses NFC tags to inform the phone when it's been placed in a headset. This is referred to as the `VRDevice` being "activated", and depending on context it may represent the user showing a clear intent to begin using VR. Many WebVR applications may want to begin presenting automatically in these scenarios.
-
-In order to start presenting when the `VRDevice` is activated, pages can request a deferred session. To request a deferred session the option `{ waitForActivate: true }` is passed into the `requestSession` call. When a session is requested with `waitForActivate` the request will remain pending until the `VRDevice` is activated, at which point the promise will resolve with the requested session (or reject, if necessary).
-
-Deferred sessions must be exclusive and will not be fulfilled if there is already an exclusive session active for the VR hardware device when the activation action occurs. If a non-exclusive deferred session is requested the promise will immediately be rejected. Deferred requests do not need to be made within a user gesture.
-
-```js
-// Requests that a session be created when the device is activated.
-vrDevice.requestSession({ exclusive: true, waitForActivate: true }).then(OnSessionStarted);
-```
-
-Once the deferred session request has been fulfilled or rejected, a new deferred session request will need to be issued if the page wishes to respond to future activation actions.
-
-To detect when the user removes the headset, at which point the page may want to end the exclusive session, listen for the `VRSession`'s `deactivate` event. Note that not all devices capable of detecting activation can reliably detect deactivation and the user may leave the page before deactivating, so pages are not guaranteed to receive an associated `deactivate` event for each activation action. The `deactivate` event will only fire for exclusive sessions.
-
-```js
-// End the session if the user deactivates the VR hardware
-// (for example: by taking it off).
-vrSession.addEventListener('deactivate', (event) => {
-  event.session.endSession().then(OnSessionEnded);
-});
-```
-
 ### Page navigation
 
 WebVR applications can, like any web page, link to other pages. In the context of an exclusive `VRSession`, this is handled by setting `window.location` to the desired URL when the user performs some action. If the page being linked to is not VR-capable the user will either have to remove the VR device to view it or the page could be shown as a 2D page in a VR browser.
 
-If the page being navigated to is VR capable, however, it's frequently desirable to allow the user to immediately create an exclusive `VRSession` for that page as well, so that the user feels as though they are navigating through a single continuous VR experience. To allow this the UA tracks when a page navigates without ending an active exclusive session first. This flags the newly loaded page as "VR navigable", which activates a couple of new behaviors to allow for the desired navigation experience. UAs may place additional restrictions on what conditions are considered VR navigable, such as restricting it to only same-origin URLs.
+If the page being navigated to is VR capable, however, it's frequently desirable to allow the user to immediately create an exclusive `VRSession` for that page as well, so that the user feels as though they are navigating through a single continuous VR experience. To allow this the UA tracks when a page navigates without ending an active exclusive session first. This flags the newly loaded page as "VR navigable", which activates a couple of new behaviors to allow for the desired navigation experience. UAs may also place additional restrictions on what conditions are considered VR navigable, such as restricting it to only same-origin URLs.
 
-Calling `requestDevice()` on a VR navigable page is guaranteed to resolve to the `VRDevice` that the previous page's exclusive session was created with. The new page can then request a deferred session using the `{ waitForNavigate: true }` option. If the page is VR navigable, the request will be resolved when the page is ready to begin presenting. If the page is not VR navigable the request will reject immediately. Only one deferred session of this type is allowed per page and subsequent requests using `waitForNavigate` will be rejected immediately. Additionally, the page's VR navigable state must expire within a User Agent-defined period after the page load.
+In order to start presenting automatically when a page is VR navigable, pages can make a "deferred" session request. To request a deferred session the option `{ waitForNavigate: true }` is passed into the `requestSession` call. If the page is VR navigable, the request will be resolved when the page is ready to begin presenting. If the page is not VR navigable the request will reject immediately.
+
+Deferred sessions must be exclusive. If a non-exclusive deferred session is requested the promise will immediately be rejected. Deferred requests do not need to be made within a user gesture. Only one session request with the `waitForNavigate` option is per page and subsequent requests using `waitForNavigate` will be rejected immediately. Additionally, the page's VR navigable state must expire within a User Agent-defined period after the page load.
 
 ```js
 // Requests that a session be created if this page was navigated to while the
@@ -631,49 +608,6 @@ vrDevice.requestSession({ exclusive: true, waitForNavigate: true }).then(OnSessi
 ```
 
 > **Non-normative Note:** The UA should provide a visual transition between the two pages. At minimum the previous page should fade to black and the new one should fade in from black. Additionally, if the UA cannot display pages in VR it is recommended that it should instruct the user to remove the headset once the UA switches to displaying a 2D page.
-
-For convenience both the `waitForNavigate` and `waitForActivate` options can be combined when calling `requestSession`. When both options are set the promise should only reject when both criteria are no longer valid. In other words, calling `requestSession` with the options `{ waitForNavigate: true, waitForActivate: true }` will not cause the promise to reject if the page is not VR navigable, but will instead continue to wait for an activation event to occur.
-
-```js
-// Requests that a session be created if this page was navigated to while the
-// previous page was viewing WebVR content OR when the device is activated.
-vrDevice.requestSession({
-    exclusive: true,
-    waitForActivate: true,
-    waitForNavigate: true 
-  }).then(OnSessionStarted);
-```
-
-### Cancelling deferred session requests
-
-Because deferred session requests may be outstanding for a long time it's possible that a previously made request could become undesirable. An example would be if an associated piece of content has been scrolled off the page or otherwise obscured, which would make it confusing for the page to then begin presenting that content in VR upon activation. In these cases the deferred request can be cancelled.
-
-To make a session request cancellable an [`AbortController`](https://dom.spec.whatwg.org/#interface-abortcontroller) is created. The controller's `signal` attribute is then passed into the `requestSession` call with the `signal` option to indicate that the request can be cancelled. Calling the `AbortController`'s `abort` method will cancel all outstanding promises that the signal was provided to.
-
-```js
-// Requests that a session be created when the device is activated.
-let abortController = new AbortController();
-vrDevice.requestSession({
-    exclusive: true,
-    waitForActivate: true,
-    signal: abortController.signal
-  }).then(OnSessionStarted)
-  .catch(reason => {
-    if (abortController.signal.aborted) {
-      console.log("Session request was canceled by the page.");
-    } else {
-      console.log("Session request was reject by the system: ", reason);
-    }
-  });
-
-// Called when starting the VR session on activation would no longer be desired.
-function OnVRSessionNoLongerNeeded() {
-  // Causes the above requestSession to reject if it hasn't already resolved.
-  abortController.abort();
-}
-```
-
-Calling `abort` on an `AbortController` will not have any effect if the promise has already resolved. Specifically, it will not end a `VRSession` created with the controller's `signal`.
 
 ## Appendix A: I don’t understand why this is a new API. Why can’t we use…
 
@@ -736,10 +670,8 @@ partial interface Navigator {
 
 dictionary VRSessionCreationOptions {
   boolean exclusive = false;
-  boolean waitForActivate = false;
   boolean waitForNavigate = false;
   VRPresentationContext outputContext;
-  AbortSignal signal;
 };
 
 [SecureContext, Exposed=Window] interface VRSession : EventTarget {
@@ -755,7 +687,6 @@ dictionary VRSessionCreationOptions {
   attribute EventHandler onblur;
   attribute EventHandler onfocus;
   attribute EventHandler onresetpose;
-  attribute EventHandler ondeactivate;
   attribute EventHandler onend;
 
   Promise<VRFrameOfReference> requestFrameOfReference(VRFrameOfReferenceType type, optional VRFrameOfReferenceOptions options);
