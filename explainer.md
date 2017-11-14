@@ -595,19 +595,24 @@ vrSession.addEventListener('resetpose', vrSessionEvent => {
 
 WebVR applications can, like any web page, link to other pages. In the context of an exclusive `VRSession`, this is handled by setting `window.location` to the desired URL when the user performs some action. If the page being linked to is not VR-capable the user will either have to remove the VR device to view it or the page could be shown as a 2D page in a VR browser.
 
-If the page being navigated to is VR capable, however, it's frequently desirable to allow the user to immediately create an exclusive `VRSession` for that page as well, so that the user feels as though they are navigating through a single continuous VR experience. To allow this the UA tracks when a page navigates without ending an active exclusive session first. This flags the newly loaded page as "VR navigable", which activates a couple of new behaviors to allow for the desired navigation experience. UAs may also place additional restrictions on what conditions are considered VR navigable, such as restricting it to only same-origin URLs.
+If the page being navigated to is VR capable, however, it's frequently desirable to allow the user to immediately create an exclusive `VRSession` for that page as well, so that the user feels as though they are navigating through a single continuous VR experience. To allow this the UA tracks when a page navigates without ending an active exclusive session first. This flags the newly loaded page as "VR navigable".
 
 In order to start presenting automatically when a page is VR navigable, pages can make a "deferred" session request. To request a deferred session the option `{ waitForNavigate: true }` is passed into the `requestSession` call. If the page is VR navigable, the request will be resolved when the page is ready to begin presenting. If the page is not VR navigable the request will reject immediately.
 
-Deferred sessions must be exclusive. If a non-exclusive deferred session is requested the promise will immediately be rejected. Deferred requests do not need to be made within a user gesture. Only one session request with the `waitForNavigate` option is per page and subsequent requests using `waitForNavigate` will be rejected immediately. Additionally, the page's VR navigable state must expire within a User Agent-defined period after the page load.
+Deferred sessions must be exclusive. If a non-exclusive deferred session is requested the promise will immediately be rejected. Deferred requests do not need to be made within a user gesture. Only one session request with the `waitForNavigate` option is per page and subsequent requests using `waitForNavigate` will be rejected immediately. The page's VR navigable state must expire after all listeners for the `window`'s `load` event have fired.
 
 ```js
-// Requests that a session be created if this page was navigated to while the
-// previous page was viewing WebVR content.
-vrDevice.requestSession({ exclusive: true, waitForNavigate: true }).then(OnSessionStarted);
+window.addEventListener('load', () => {
+  // Requests that a session be created if this page was navigated to while the
+  // previous page was viewing WebVR content.
+  vrDevice.requestSession({ exclusive: true, waitForNavigate: true }).then(OnSessionStarted);
+});
 ```
 
-> **Non-normative Note:** The UA should provide a visual transition between the two pages. At minimum the previous page should fade to black and the new one should fade in from black. Additionally, if the UA cannot display pages in VR it is recommended that it should instruct the user to remove the headset once the UA switches to displaying a 2D page.
+> **Non-normative Notes:**
+> - Pages should not rely exclusively on deferred sessions as a method for presenting VR content, since it is not guaranteed that they will be supported in all environments. An in-page button for starting VR should always be provided as a best practice.
+> - UAs may place additional restrictions on what conditions are considered VR navigable, such as restricting it to only same-origin URLs.
+> - The UA should provide a visual transition between the two pages. Additionally, if the UA cannot display pages in VR it is recommended that it should instruct the user to remove the headset once the UA switches to displaying a 2D page.
 
 ## Appendix A: I don’t understand why this is a new API. Why can’t we use…
 
